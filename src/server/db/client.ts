@@ -6,9 +6,16 @@ import { seedDatabase } from "./seed";
 
 export type DbMode = "local" | "tmp" | "turso";
 
-export function resolveDbUrl(): { url: string; mode: DbMode } {
+let activeMode: DbMode = "local";
+let activeUrl = "file:./data/goopo.db";
+
+export function resolveDbConfig(): { url: string; authToken?: string; mode: DbMode } {
   if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-    return { url: process.env.TURSO_DATABASE_URL, mode: "turso" };
+    return {
+      url: process.env.TURSO_DATABASE_URL,
+      authToken: process.env.TURSO_AUTH_TOKEN,
+      mode: "turso",
+    };
   }
   if (process.env.VERCEL) {
     return { url: "file:/tmp/goopo.db", mode: "tmp" };
@@ -16,20 +23,49 @@ export function resolveDbUrl(): { url: string; mode: DbMode } {
   return { url: "file:./data/goopo.db", mode: "local" };
 }
 
+export function resolveDbUrl(): { url: string; mode: DbMode } {
+  const conf = resolveDbConfig();
+  return { url: conf.url, mode: conf.mode };
+}
+
 let clientPromise: Promise<Client> | null = null;
 let readyPromise: Promise<Client> | null = null;
 
 function createOnce(): Promise<Client> {
   if (!clientPromise) {
-    const { url } = resolveDbUrl();
     clientPromise = (async () => {
-      const c = createClient({ url });
+      const config = resolveDbConfig();
+      activeMode = config.mode;
+      activeUrl = config.url;
+
+      if (config.mode === "turso") {
+        try {
+          const c = createClient({
+            url: config.url,
+            authToken: config.authToken,
+          });
+          await c.execute("SELECT 1");
+          return c;
+        } catch (tursoErr) {
+          console.warn("[db] Falló conexión a Turso, degradando a SQLite local/tmp:", tursoErr);
+          activeMode = process.env.VERCEL ? "tmp" : "local";
+          activeUrl = process.env.VERCEL ? "file:/tmp/goopo.db" : "file:./data/goopo.db";
+          const fallback = createClient({ url: activeUrl });
+          await fallback.execute("SELECT 1");
+          return fallback;
+        }
+      }
+
+      const c = createClient({ url: config.url });
       await c.execute("SELECT 1").catch((err) => {
         clientPromise = null;
         throw err;
       });
       return c;
-    })();
+    })().catch((err) => {
+      clientPromise = null;
+      throw err;
+    });
   }
   return clientPromise;
 }
@@ -63,9 +99,9 @@ export async function getDb() {
 
 /** Exposed for the health endpoint / docs. */
 export function getDbMode(): DbMode {
-  return resolveDbUrl().mode;
+  return activeMode;
 }
 
 export function getDbUrl(): string {
-  return resolveDbUrl().url;
+  return activeUrl;
 }
