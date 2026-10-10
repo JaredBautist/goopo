@@ -1,0 +1,14 @@
+import { createClient } from '@libsql/client';
+const c = createClient({ url: 'file:./data/goopo.db' });
+const u = await c.execute('SELECT COUNT(*) c FROM users');
+const comp = await c.execute('SELECT COUNT(*) c FROM competitions');
+const pred = await c.execute('SELECT COUNT(*) c FROM predictions');
+const wx = await c.execute('SELECT COUNT(*) c FROM wallet_transactions');
+console.log('users', u.rows[0].c, '| competitions', comp.rows[0].c, '| predictions', pred.rows[0].c, '| ledger', wx.rows[0].c);
+const bad = await c.execute(`SELECT u.id, u.balance, COALESCE(SUM(w.amount),0) t FROM users u LEFT JOIN wallet_transactions w ON w.user_id=u.id GROUP BY u.id HAVING u.balance != t`);
+console.log('ledger mismatches:', bad.rows.length);
+const st = await c.execute('SELECT status, COUNT(*) c FROM competitions GROUP BY status');
+console.log(st.rows.map(r => r.status + '=' + r.c).join(' | '));
+const resolved = await c.execute(`SELECT slug, tie_rule FROM competitions WHERE status='resolved'`);
+console.log('resolved:', resolved.rows.map(r => r.slug + '(' + r.tie_rule + ')').join(', '));
+c.close();
