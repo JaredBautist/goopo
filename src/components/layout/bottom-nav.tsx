@@ -52,7 +52,7 @@ export function BottomNav({ user }: { user?: NavUser }) {
           const Icon = item.icon;
           return (
             <Link
-              key={item.href}
+              key={item.label}
               href={item.href}
               className={`relative flex min-w-0 flex-1 flex-col items-center justify-center py-1 transition-all duration-150 active:scale-95 ${
                 item.isActive

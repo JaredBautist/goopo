@@ -1157,3 +1157,61 @@ export async function seedDatabase(client: Client) {
 }
 
 export { DEMO_USERS, COMPETITIONS };
+
+const DEMO_SLUGS = new Set(COMPETITIONS.map((c) => c.slug));
+const DEMO_OPEN_COMPETITIONS = COMPETITIONS.filter((c) => c.status === "open");
+
+/**
+ * Los plazos del catálogo demo son relativos al momento del sembrado, así que
+ * con el tiempo todas las competencias acaban cerradas y el catálogo queda
+ * vacío. En modo demo, cuando no queda ninguna `open` y el catálogo es
+ * exactamente el sembrado, reprogramamos las que se cerraron por vencimiento
+ * (nunca las resueltas, canceladas ni cerradas manualmente).
+ */
+export async function refreshExpiredDemoCatalog(
+  client: Client,
+  now = new Date(),
+): Promise<number> {
+  if (process.env.NEXT_PUBLIC_DEMO_MODE === "false") return 0;
+  if (DEMO_OPEN_COMPETITIONS.length === 0) return 0;
+
+  const openCount = await client.execute(
+    "SELECT COUNT(*) AS c FROM competitions WHERE status = 'open'",
+  );
+  if (Number(openCount.rows[0]?.c ?? 0) > 0) return 0;
+
+  const catalog = await client.execute("SELECT slug FROM competitions");
+  if (catalog.rows.length === 0) return 0;
+  const isDemoCatalog = catalog.rows.every((row) => DEMO_SLUGS.has(String(row.slug)));
+  if (!isDemoCatalog) return 0;
+
+  let refreshed = 0;
+  for (const c of DEMO_OPEN_COMPETITIONS) {
+    const closesAt = new Date(now.getTime() + c.closesInMinutes * 60 * 1000);
+    const opensAt = new Date(closesAt.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const resultAt =
+      c.resultInMinutes != null
+        ? new Date(now.getTime() + c.resultInMinutes * 60 * 1000).toISOString()
+        : null;
+
+    const res = await client.execute({
+      sql: `UPDATE competitions
+            SET status = 'open', opens_at = ?, closes_at = ?, expected_result_at = ?, updated_at = ?
+            WHERE slug = ? AND status = 'closed' AND resolved_at IS NULL`,
+      args: [
+        opensAt.toISOString(),
+        closesAt.toISOString(),
+        resultAt,
+        now.toISOString(),
+        c.slug,
+      ],
+    });
+    refreshed += res.rowsAffected;
+  }
+
+  if (refreshed > 0) {
+    console.info(`[db] catálogo demo reprogramado: ${refreshed} competencias abiertas de nuevo`);
+  }
+  return refreshed;
+}
+

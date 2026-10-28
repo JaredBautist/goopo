@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Button, Card } from "@/components/ui";
 import { CompetitionCard } from "@/components/competitions/competition-card";
-import { listCompetitions } from "@/server/services/competitions.service";
+import { listCompetitions, syncCompetitionStates } from "@/server/services/competitions.service";
 import { ensureDb } from "@/server/db/client";
 import { formatGoopos } from "@/lib/constants";
 import {
@@ -24,6 +24,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
+  await syncCompetitionStates();
   const comps = await listCompetitions({ status: "open", sort: "closing_soon", limit: 3 });
   const client = await ensureDb();
   const stats = await client.execute(`SELECT

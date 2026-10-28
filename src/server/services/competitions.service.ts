@@ -1,4 +1,5 @@
 import { ensureDb } from "@/server/db/client";
+import { refreshExpiredDemoCatalog } from "@/server/db/seed";
 import { computeLazyClosures } from "@/server/domain/competition-state";
 import type { CompetitionStatus, TieRule } from "@/types/domain";
 import { createId } from "@/lib/id";
@@ -51,6 +52,8 @@ export async function syncCompetitionStates(now = new Date()): Promise<number> {
       args: [now.toISOString(), id],
     });
   }
+  // Mantiene vivo el catálogo demo aunque el proceso/DB lleve días en pie.
+  await refreshExpiredDemoCatalog(client, now);
   return toClose.length;
 }
 

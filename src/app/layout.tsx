@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Sora } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 import { AgeGate } from "@/components/layout/age-gate";
 import { NavbarServer } from "@/components/layout/navbar-ssr";
@@ -40,11 +41,9 @@ export default function RootLayout({
   return (
     <html lang="es" className="dark" suppressHydrationWarning data-scroll-behavior="smooth">
       <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('goopo_theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})()`,
-          }}
-        />
+        <Script id="goopo-theme-init" strategy="beforeInteractive">
+          {`(function(){try{var t=localStorage.getItem('goopo_theme');if(t==='light'){document.documentElement.classList.remove('dark')}else{document.documentElement.classList.add('dark')}}catch(e){document.documentElement.classList.add('dark')}})()`}
+        </Script>
       </head>
       <body className={`${inter.variable} ${sora.variable} font-sans antialiased relative min-h-screen`}>
         <AppBackground />

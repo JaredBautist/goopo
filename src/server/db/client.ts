@@ -3,6 +3,7 @@ import { createClient, type Client } from "@libsql/client";
 import * as schema from "./schema";
 import { runMigrations } from "./migrate";
 import { seedDatabase } from "./seed";
+import { ensureDbDirectory } from "./local-path";
 
 export type DbMode = "local" | "tmp" | "turso";
 
@@ -50,12 +51,14 @@ function createOnce(): Promise<Client> {
           console.warn("[db] Falló conexión a Turso, degradando a SQLite local/tmp:", tursoErr);
           activeMode = process.env.VERCEL ? "tmp" : "local";
           activeUrl = process.env.VERCEL ? "file:/tmp/goopo.db" : "file:./data/goopo.db";
+          await ensureDbDirectory(activeUrl);
           const fallback = createClient({ url: activeUrl });
           await fallback.execute("SELECT 1");
           return fallback;
         }
       }
 
+      await ensureDbDirectory(config.url);
       const c = createClient({ url: config.url });
       await c.execute("SELECT 1").catch((err) => {
         clientPromise = null;
